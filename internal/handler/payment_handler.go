@@ -2,8 +2,10 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"httpServ/internal/model"
+	"httpServ/internal/repository"
 	"httpServ/internal/service"
 	"net/http"
 
@@ -38,9 +40,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(p)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err)
-		return
 	}
 }
 
@@ -49,8 +49,12 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err := h.service.Delete(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		fmt.Println(err)
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -60,6 +64,8 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	p := model.Payment{}
+	id := chi.URLParam(r, "id")
+
 	err := json.NewDecoder(r.Body).Decode(&p)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -68,10 +74,16 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Printf("Распарсили в структу p %+v\n", p)
 
+	p.ID = id
+
 	err = h.service.Update(p)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		fmt.Println(err)
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
 		return
 	}
 
@@ -79,9 +91,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	err = json.NewEncoder(w).Encode(p)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err)
-		return
 	}
 }
 
@@ -91,8 +101,12 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 
 	payment, err := h.service.Get(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		fmt.Println(err)
+		switch {
+		case errors.Is(err, repository.ErrNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		default:
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
 		return
 	}
 

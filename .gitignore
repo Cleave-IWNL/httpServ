@@ -1,0 +1,22 @@
+# Binaries
+server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Vendor
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.mod.tidy
