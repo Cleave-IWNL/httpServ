@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"httpServ/internal/model"
 	"httpServ/internal/repository"
 )
@@ -13,18 +14,18 @@ func NewService(Repo repository.PaymentRepo) *Service {
 	return &Service{Repo: Repo}
 }
 
-func (s *Service) Create(p model.Payment) (string, error) {
-	return s.Repo.Create(p)
+func (s *Service) Create(ctx context.Context, p model.Payment) (string, error) {
+	return s.Repo.Create(ctx, p)
 }
 
-func (s *Service) Update(p model.Payment) error {
-	return s.Repo.Update(p)
+func (s *Service) Update(ctx context.Context, p model.Payment) error {
+	return s.Repo.Update(ctx, p)
 }
 
-func (s *Service) Delete(id string) error {
-	return s.Repo.Delete(id)
+func (s *Service) Delete(ctx context.Context, id string) error {
+	return s.Repo.Delete(ctx, id)
 }
 
-func (s *Service) Get(id string) (model.Payment, error) {
-	return s.Repo.Get(id)
+func (s *Service) Get(ctx context.Context, id string) (model.Payment, error) {
+	return s.Repo.Get(ctx, id)
 }

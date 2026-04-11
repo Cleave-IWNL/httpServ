@@ -1,15 +1,13 @@
 package repository
 
 import (
-	"errors"
+	"context"
 	"httpServ/internal/model"
 )
 
 type PaymentRepo interface {
-	Create(p model.Payment) (string, error)
-	Get(id string) (model.Payment, error)
-	Update(p model.Payment) error
-	Delete(id string) error
+	Create(ctx context.Context, p model.Payment) (string, error)
+	Get(ctx context.Context, id string) (model.Payment, error)
+	Update(ctx context.Context, p model.Payment) error
+	Delete(ctx context.Context, id string) error
 }
-
-var ErrNotFound = errors.New("not found")
