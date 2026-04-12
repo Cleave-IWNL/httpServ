@@ -12,11 +12,13 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-playground/validator/v10"
+	"go.uber.org/zap"
 )
 
 type Handler struct {
 	service  *service.Service
 	validate *validator.Validate
+	logger   *zap.Logger
 }
 
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +50,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Распарсили в структу p %+v\n", p)
+	h.logger.Info("payment parsed", zap.Any("payment", p))
 
 	id, err := h.service.Create(r.Context(), p)
 
@@ -59,7 +61,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		fmt.Println(err)
+		h.logger.Error("internal error", zap.Error(err))
 
 		return
 	}
@@ -72,7 +74,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(p)
 
 	if err != nil {
-		fmt.Println(err)
+		h.logger.Error("internal error", zap.Error(err))
 	}
 }
 
@@ -126,7 +128,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Распарсили в структу p %+v\n", p)
+	h.logger.Info("payment parsed", zap.Any("payment", p))
 
 	p.ID = id
 
@@ -149,7 +151,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(p)
 
 	if err != nil {
-		fmt.Println(err)
+		h.logger.Error("internal error", zap.Error(err))
 	}
 }
 
@@ -178,13 +180,14 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	err = json.NewEncoder(w).Encode(p)
 
 	if err != nil {
-		fmt.Println(err)
+		h.logger.Error("internal error", zap.Error(err))
 	}
 }
 
-func NewHandler(s *service.Service) *Handler {
+func NewHandler(s *service.Service, z *zap.Logger) *Handler {
 	return &Handler{
 		service:  s,
 		validate: validator.New(),
+		logger:   z,
 	}
 }

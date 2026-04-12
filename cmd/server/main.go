@@ -1,34 +1,60 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
-	"os"
 
 	"httpServ/internal/handler"
 	"httpServ/internal/repository"
 	"httpServ/internal/service"
+	"httpServ/pkg/config"
+	"httpServ/pkg/db"
+	"httpServ/pkg/logger"
+	"httpServ/worker"
 
-	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"github.com/pressly/goose/v3"
+	"go.uber.org/zap"
 )
 
 func main() {
-	db, err := sqlx.Connect("postgres", os.Getenv("DATABASE_URL"))
+	cfg, err := config.Load()
+
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 
-	if err := goose.Up(db.DB, "migrations"); err != nil {
+	zapLog, err := logger.New(cfg.LogLevel)
+
+	if err != nil {
 		log.Fatal(err)
 	}
 
-	repo := repository.NewRepoPostgres(db)
-	service := service.NewService(repo)
-	h := handler.NewHandler(service)
+	defer zapLog.Sync()
+
+	database, err := db.New(db.DatabaseConfig{
+		URL:            cfg.DatabaseURL,
+		MigrationsPath: cfg.MigrationsPath,
+	})
+
+	if err != nil {
+		zapLog.Fatal("failed to init db", zap.Error(err))
+	}
+
+	defer database.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	relay := worker.NewOutboxRelay(database, zapLog)
+	go relay.Run(ctx)
+
+	repo := repository.NewRepoPostgres(database)
+	svc := service.NewService(repo)
+	h := handler.NewHandler(svc, zapLog)
 	r := handler.NewRouter(h)
 
-	http.ListenAndServe(":8080", r)
+	if err = http.ListenAndServe(":"+cfg.ServerPort, r); err != nil {
+		zapLog.Fatal("server failed", zap.Error(err))
+	}
 }

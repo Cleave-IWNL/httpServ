@@ -20,3 +20,6 @@ Thumbs.db
 
 # Go
 *.mod.tidy
+
+# Env
+.env

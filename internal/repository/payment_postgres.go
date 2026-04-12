@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"httpServ/internal/apperror"
 	"httpServ/internal/model"
+	"httpServ/pkg/db"
 
 	"database/sql"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
 )
 
 type RepoPostgres struct {
-	db *sqlx.DB
+	db db.DB
 }
 
-func NewRepoPostgres(db *sqlx.DB) *RepoPostgres {
+func NewRepoPostgres(db db.DB) *RepoPostgres {
 	return &RepoPostgres{db: db}
 }
 
