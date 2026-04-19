@@ -35,7 +35,7 @@ func (r *RepoPostgres) Create(ctx context.Context, p model.Payment) (string, err
 		return "", fmt.Errorf("payment with id %s: %w", id, apperror.ErrAlreadyExists)
 	}
 
-	_, err = r.db.ExecContext(ctx, "INSERT INTO payments (id, amount) VALUES ($1, $2)", id, p.Amount)
+	_, err = r.db.ExecContext(ctx, "INSERT INTO payments (id, amount, currency) VALUES ($1, $2, $3)", id, p.Amount, p.Currency)
 
 	if err != nil {
 		return "", err
@@ -47,7 +47,7 @@ func (r *RepoPostgres) Create(ctx context.Context, p model.Payment) (string, err
 func (r *RepoPostgres) Get(ctx context.Context, id string) (model.Payment, error) {
 	var p model.Payment
 
-	err := r.db.GetContext(ctx, &p, "SELECT id, amount FROM payments WHERE id = $1", id)
+	err := r.db.GetContext(ctx, &p, "SELECT id, amount, currency FROM payments WHERE id = $1", id)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -60,7 +60,7 @@ func (r *RepoPostgres) Get(ctx context.Context, id string) (model.Payment, error
 }
 
 func (r *RepoPostgres) Update(ctx context.Context, p model.Payment) error {
-	res, err := r.db.ExecContext(ctx, "UPDATE payments SET amount = $1 where id = $2", p.Amount, p.ID)
+	res, err := r.db.ExecContext(ctx, "UPDATE payments SET amount = $1, currency = $2 where id = $3", p.Amount, p.Currency, p.ID)
 
 	if err != nil {
 		return err

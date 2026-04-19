@@ -184,6 +184,35 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (h *Handler) GetInCurrency(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	currency := strings.ToUpper(r.URL.Query().Get("currency"))
+
+	if len(currency) != 3 {
+		http.Error(w, "currency myst be 3-letter code", http.StatusBadRequest)
+		return
+	}
+
+	resp, err := h.service.GetInCurrency(r.Context(), id, currency)
+	if err != nil {
+
+		if appErr, ok := errors.AsType[apperror.ErrorResp](err); ok {
+			http.Error(w, appErr.Message, appErr.Status)
+		} else {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	err = json.NewEncoder(w).Encode(resp)
+
+	if err != nil {
+		h.logger.Error("internal error", zap.Error(err))
+	}
+}
+
 func NewHandler(s *service.Service, z *zap.Logger) *Handler {
 	return &Handler{
 		service:  s,

@@ -4,12 +4,15 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
+	"httpServ/internal/client/exchangerate"
 	"httpServ/internal/handler"
 	"httpServ/internal/repository"
 	"httpServ/internal/service"
 	"httpServ/pkg/config"
 	"httpServ/pkg/db"
+	"httpServ/pkg/httpclient"
 	"httpServ/pkg/logger"
 	"httpServ/worker"
 
@@ -49,8 +52,16 @@ func main() {
 	relay := worker.NewOutboxRelay(database, zapLog)
 	go relay.Run(ctx)
 
+	baseHTTP := httpclient.NewDefaultClient(5 * time.Second)
+	retryHTTP := httpclient.NewRetryClient(baseHTTP, httpclient.RetryConfig{
+		MaxRetries: 3,
+	})
+	loggedHTTP := httpclient.NewLoggingClient(retryHTTP, zapLog)
+
+	rateProvider := exchangerate.New(loggedHTTP, cfg.ExchangeAPIURL, cfg.ExchangeAPIKey)
+
 	repo := repository.NewRepoPostgres(database)
-	svc := service.NewService(repo)
+	svc := service.NewService(repo, rateProvider)
 	h := handler.NewHandler(svc, zapLog)
 	r := handler.NewRouter(h)
 

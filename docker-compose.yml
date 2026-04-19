@@ -19,6 +19,7 @@ services:
       MIGRATIONS_PATH: migrations
       SERVER_PORT: "8080"
       LOG_LEVEL: info
+      EXCHANGE_API_KEY: ${EXCHANGE_API_KEY}
     depends_on:
       - db
 
