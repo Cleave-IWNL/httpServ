@@ -2,16 +2,55 @@ package service
 
 import (
 	"context"
+
 	"httpServ/internal/model"
 	"httpServ/internal/repository"
 )
 
-type Service struct {
-	Repo repository.PaymentRepo
+type RateProvider interface {
+	GetRate(ctx context.Context, from, to string) (model.Rate, error)
 }
 
-func NewService(Repo repository.PaymentRepo) *Service {
-	return &Service{Repo: Repo}
+type Service struct {
+	Repo repository.PaymentRepo
+	Rate RateProvider
+}
+
+func NewService(repo repository.PaymentRepo, rate RateProvider) *Service {
+	return &Service{Repo: repo, Rate: rate}
+}
+
+func (s *Service) GetInCurrency(ctx context.Context, id, target string) (model.PaymentInCurrency, error) {
+	p, err := s.Repo.Get(ctx, id)
+	if err != nil {
+		return model.PaymentInCurrency{}, err
+	}
+
+	if p.Currency == target {
+		return model.PaymentInCurrency{
+			ID:               p.ID,
+			OriginalAmount:   p.Amount,
+			OriginalCurrency: p.Currency,
+			TargetCurrency:   target,
+			ConvertedAmount:  float64(p.Amount),
+			Rate:             1.0,
+		}, nil
+	}
+
+	rate, err := s.Rate.GetRate(ctx, p.Currency, target)
+	if err != nil {
+		return model.PaymentInCurrency{}, err
+	}
+
+	return model.PaymentInCurrency{
+		ID:               p.ID,
+		OriginalAmount:   p.Amount,
+		OriginalCurrency: p.Currency,
+		TargetCurrency:   target,
+		ConvertedAmount:  float64(p.Amount) * rate.Value,
+		Rate:             rate.Value,
+		RateFetchedAt:    rate.FetchedAt,
+	}, nil
 }
 
 func (s *Service) Create(ctx context.Context, p model.Payment) (string, error) {

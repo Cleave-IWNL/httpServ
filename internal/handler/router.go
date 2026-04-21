@@ -8,5 +8,6 @@ func NewRouter(h *Handler) chi.Router {
 	r.Get("/payment/{id}", h.Get)
 	r.Put("/payment/{id}", h.Update)
 	r.Delete("/payment/{id}", h.Delete)
+	r.Get("/payment/{id}/inCurrency", h.GetInCurrency)
 	return r
 }
