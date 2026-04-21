@@ -1,12 +1,15 @@
 package httpclient
 
 import (
-	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"io"
-	"log"
+	"math/rand"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type RetryConfig struct {
@@ -19,9 +22,10 @@ type RetryConfig struct {
 type RetryClient struct {
 	delegate HTTPClient
 	config   RetryConfig
+	logger   *zap.Logger
 }
 
-func NewRetryClient(delegate HTTPClient, config RetryConfig) *RetryClient {
+func NewRetryClient(delegate HTTPClient, config RetryConfig, logger *zap.Logger) *RetryClient {
 	if config.MaxRetries == 0 {
 		config.MaxRetries = 3
 	}
@@ -35,19 +39,25 @@ func NewRetryClient(delegate HTTPClient, config RetryConfig) *RetryClient {
 	}
 
 	if config.ShouldRetry == nil {
-		config.ShouldRetry = func(resp *http.Response, err error) bool {
-			if err != nil {
-				return true
-			}
-
-			return resp.StatusCode >= 500
-		}
+		config.ShouldRetry = defaultShouldRetry
 	}
 
 	return &RetryClient{
 		delegate: delegate,
 		config:   config,
+		logger:   logger,
 	}
+}
+
+func defaultShouldRetry(resp *http.Response, err error) bool {
+	if err != nil {
+		return !errors.Is(err, context.Canceled) &&
+			!errors.Is(err, context.DeadlineExceeded)
+	}
+	if resp == nil {
+		return true
+	}
+	return resp.StatusCode >= 500 || resp.StatusCode == http.StatusTooManyRequests
 }
 
 func (c *RetryClient) Do(req *http.Request) (*http.Response, error) {
@@ -57,35 +67,66 @@ func (c *RetryClient) Do(req *http.Request) (*http.Response, error) {
 		delay = c.config.InitialDelay
 	)
 
-	for i := 0; i < c.config.MaxRetries; i++ {
-		if req.Body != nil {
-			if seeker, ok := req.Body.(io.Seeker); ok {
-				_, seekErr := seeker.Seek(0, io.SeekStart)
+	ctx := req.Context()
 
-				if seekErr != nil {
-					return nil, fmt.Errorf("failed to seek request body: %w", seekErr)
-				}
-			} else {
-				bodyBytes, readErr := io.ReadAll(req.Body)
-
-				if readErr != nil {
-					return nil, fmt.Errorf("failed to read request body for retry: %w", readErr)
-				}
-
-				req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	for attempt := 0; attempt < c.config.MaxRetries; attempt++ {
+		if req.GetBody != nil {
+			body, bodyErr := req.GetBody()
+			if bodyErr != nil {
+				return nil, fmt.Errorf("get request body: %w", bodyErr)
 			}
+			req.Body = body
 		}
 
-		resp, err = c.delegate.Do(req)
+		r := req.Clone(ctx)
+		resp, err = c.delegate.Do(r)
 
-		if c.config.ShouldRetry(resp, err) {
-			log.Printf("Request failed (attempt %d/%d), retrying in %v. Error: %v", i+1, c.config.MaxRetries, delay, err)
-			time.Sleep(delay)
-			delay = min(time.Duration(float64(delay)*2), c.config.MaxDelay)
-			continue
+		if !c.config.ShouldRetry(resp, err) || attempt == c.config.MaxRetries-1 {
+			return resp, err
 		}
-		return resp, err
+
+		if resp != nil && resp.Body != nil {
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+		}
+
+		backoff := jitter(delay)
+		c.logger.Warn("retry attempt",
+			zap.Int("attempt", attempt+1),
+			zap.Int("max", c.config.MaxRetries),
+			zap.Duration("backoff", backoff),
+			zap.String("method", req.Method),
+			zap.String("url", req.URL.String()),
+			zap.Error(err),
+		)
+
+		if sleepErr := sleepCtx(ctx, backoff); sleepErr != nil {
+			return resp, fmt.Errorf("retry sleep canceled: %w", sleepErr)
+		}
+
+		delay *= 2
+		if delay > c.config.MaxDelay {
+			delay = c.config.MaxDelay
+		}
 	}
 
 	return resp, err
+}
+
+func jitter(d time.Duration) time.Duration {
+	if d <= 0 {
+		return 100 * time.Millisecond
+	}
+	return d/2 + time.Duration(rand.Int63n(int64(d)))
+}
+
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
 }

@@ -1,4 +1,4 @@
-package service
+package model
 
 type PaymentInCurrency struct {
 	ID               string  `json:"id"`

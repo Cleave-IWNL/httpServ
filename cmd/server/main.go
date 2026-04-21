@@ -55,7 +55,7 @@ func main() {
 	baseHTTP := httpclient.NewDefaultClient(5 * time.Second)
 	retryHTTP := httpclient.NewRetryClient(baseHTTP, httpclient.RetryConfig{
 		MaxRetries: 3,
-	})
+	}, zapLog)
 	loggedHTTP := httpclient.NewLoggingClient(retryHTTP, zapLog)
 
 	rateProvider := exchangerate.New(loggedHTTP, cfg.ExchangeAPIURL, cfg.ExchangeAPIKey)

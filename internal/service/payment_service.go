@@ -2,13 +2,13 @@ package service
 
 import (
 	"context"
-	"httpServ/internal/client/exchangerate"
+
 	"httpServ/internal/model"
 	"httpServ/internal/repository"
 )
 
 type RateProvider interface {
-	GetRate(ctx context.Context, from, to string) (exchangerate.Rate, error)
+	GetRate(ctx context.Context, from, to string) (model.Rate, error)
 }
 
 type Service struct {
@@ -16,18 +16,18 @@ type Service struct {
 	Rate RateProvider
 }
 
-func NewService(Repo repository.PaymentRepo, rate RateProvider) *Service {
-	return &Service{Repo: Repo, Rate: rate}
+func NewService(repo repository.PaymentRepo, rate RateProvider) *Service {
+	return &Service{Repo: repo, Rate: rate}
 }
 
-func (s *Service) GetInCurrency(ctx context.Context, id, target string) (PaymentInCurrency, error) {
+func (s *Service) GetInCurrency(ctx context.Context, id, target string) (model.PaymentInCurrency, error) {
 	p, err := s.Repo.Get(ctx, id)
 	if err != nil {
-		return PaymentInCurrency{}, err
+		return model.PaymentInCurrency{}, err
 	}
 
 	if p.Currency == target {
-		return PaymentInCurrency{
+		return model.PaymentInCurrency{
 			ID:               p.ID,
 			OriginalAmount:   p.Amount,
 			OriginalCurrency: p.Currency,
@@ -39,10 +39,10 @@ func (s *Service) GetInCurrency(ctx context.Context, id, target string) (Payment
 
 	rate, err := s.Rate.GetRate(ctx, p.Currency, target)
 	if err != nil {
-		return PaymentInCurrency{}, err
+		return model.PaymentInCurrency{}, err
 	}
 
-	return PaymentInCurrency{
+	return model.PaymentInCurrency{
 		ID:               p.ID,
 		OriginalAmount:   p.Amount,
 		OriginalCurrency: p.Currency,
