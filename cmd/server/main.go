@@ -13,6 +13,7 @@ import (
 	"httpServ/pkg/config"
 	"httpServ/pkg/db"
 	"httpServ/pkg/httpclient"
+	kafkaclient "httpServ/pkg/kafka"
 	"httpServ/pkg/logger"
 	"httpServ/worker"
 
@@ -60,8 +61,16 @@ func main() {
 
 	rateProvider := exchangerate.New(loggedHTTP, cfg.ExchangeAPIURL, cfg.ExchangeAPIKey)
 
+	producer, err := kafkaclient.New(cfg.KafkaBrokers, cfg.KafkaPaymentsTopic, zapLog)
+
+	if err != nil {
+		zapLog.Fatal("failed to init kafka producer", zap.Error(err))
+	}
+
+	defer producer.Close()
+
 	repo := repository.NewRepoPostgres(database)
-	svc := service.NewService(repo, rateProvider)
+	svc := service.NewService(repo, rateProvider, producer)
 	h := handler.NewHandler(svc, zapLog)
 	r := handler.NewRouter(h)
 
