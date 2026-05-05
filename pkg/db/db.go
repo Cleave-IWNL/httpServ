@@ -19,12 +19,29 @@ type Database struct {
 
 type DB interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	GetContext(ctx context.Context, dest any, query string, args ...any) error
+	SelectContext(ctx context.Context, dest any, query string, args ...any) error
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
+}
+
+type Tx interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	GetContext(ctx context.Context, dest any, query string, args ...any) error
+	SelectContext(ctx context.Context, dest any, query string, args ...any) error
+	Commit() error
+	Rollback() error
 }
 
 func (d *Database) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
 	return d.db.QueryRowContext(ctx, query, args...)
+}
+
+func (d *Database) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return d.db.QueryContext(ctx, query, args...)
 }
 
 func (d *Database) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
@@ -33,6 +50,18 @@ func (d *Database) ExecContext(ctx context.Context, query string, args ...any) (
 
 func (d *Database) GetContext(ctx context.Context, dest any, query string, args ...any) error {
 	return d.db.GetContext(ctx, dest, query, args...)
+}
+
+func (d *Database) SelectContext(ctx context.Context, dest any, query string, args ...any) error {
+	return d.db.SelectContext(ctx, dest, query, args...)
+}
+
+func (d *Database) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
+	tx, err := d.db.BeginTxx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }
 
 func New(cfg DatabaseConfig) (*Database, error) {

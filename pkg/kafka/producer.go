@@ -2,11 +2,8 @@ package kafkaclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
-
-	"httpServ/internal/model"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"go.uber.org/zap"
@@ -53,19 +50,13 @@ func (p *Producer) drainEvents() {
 	}
 }
 
-func (p *Producer) PublishPaymentCreated(ctx context.Context, event model.PaymentCreatedEvent) error {
-	payload, err := json.Marshal(event)
-
-	if err != nil {
-		return fmt.Errorf("kafka: marshal event: %w", err)
-	}
-
+func (p *Producer) Publish(ctx context.Context, key string, payload []byte) error {
 	message := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &p.paymentsTopic,
 			Partition: kafka.PartitionAny,
 		},
-		Key:   []byte(event.PaymentID),
+		Key:   []byte(key),
 		Value: payload,
 	}
 

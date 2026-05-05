@@ -14,18 +14,13 @@ type RateProvider interface {
 	GetRate(ctx context.Context, from, to string) (model.Rate, error)
 }
 
-type EventPublisher interface {
-	PublishPaymentCreated(ctx context.Context, event model.PaymentCreatedEvent) error
-}
-
 type Service struct {
-	Repo      repository.PaymentRepo
-	Rate      RateProvider
-	Publisher EventPublisher
+	Repo repository.PaymentRepo
+	Rate RateProvider
 }
 
-func NewService(repo repository.PaymentRepo, rate RateProvider, publisher EventPublisher) *Service {
-	return &Service{Repo: repo, Rate: rate, Publisher: publisher}
+func NewService(repo repository.PaymentRepo, rate RateProvider) *Service {
+	return &Service{Repo: repo, Rate: rate}
 }
 
 func (s *Service) GetInCurrency(ctx context.Context, id, target string) (model.PaymentInCurrency, error) {
@@ -62,30 +57,16 @@ func (s *Service) GetInCurrency(ctx context.Context, id, target string) (model.P
 }
 
 func (s *Service) Create(ctx context.Context, p model.Payment) (string, error) {
-	// TODO outbox
-	id, err := s.Repo.Create(ctx, p)
-
-	if err != nil {
-		return "", err
-	}
-
-	paymentEvent := model.PaymentCreatedEvent{
+	event := model.PaymentCreatedEvent{
 		EventID:       uuid.NewString(),
 		EventType:     model.PaymentCreatedType,
 		OccurredAt:    time.Now().UTC(),
 		SchemaVersion: 1,
-		PaymentID:     id,
 		Amount:        p.Amount,
 		Currency:      p.Currency,
 	}
 
-	err = s.Publisher.PublishPaymentCreated(ctx, paymentEvent)
-
-	if err != nil {
-		return "", err
-	}
-
-	return id, nil
+	return s.Repo.Create(ctx, p, event)
 }
 
 func (s *Service) Update(ctx context.Context, p model.Payment) error {
