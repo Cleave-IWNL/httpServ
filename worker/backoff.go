@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+const jitterFraction = 0.2
+
 func NextBackoff(attempt int, base, max time.Duration) time.Duration {
 	if attempt < 1 {
 		attempt = 1
@@ -21,9 +23,15 @@ func NextBackoff(attempt int, base, max time.Duration) time.Duration {
 	if delay > max || delay <= 0 {
 		delay = max
 	}
-	if delay <= 0 {
-		return 0
-	}
 
-	return time.Duration(rand.Int64N(int64(delay)))
+	jitter := float64(delay) * jitterFraction * (rand.Float64()*2 - 1)
+	result := time.Duration(float64(delay) + jitter)
+
+	if result > max {
+		result = max
+	}
+	if result <= 0 {
+		result = base
+	}
+	return result
 }

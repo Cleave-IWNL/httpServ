@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"sync"
 	"syscall"
@@ -44,10 +45,22 @@ func main() {
 	if err != nil {
 		zapLog.Fatal("failed to init db", zap.Error(err))
 	}
-	defer database.Close()
 
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigCh
+		zapLog.Info("shutdown signal received", zap.String("signal", sig.String()))
+		cancel()
+
+		sig = <-sigCh
+		zapLog.Warn("second signal received, forcing exit", zap.String("signal", sig.String()))
+		os.Exit(1)
+	}()
 
 	baseHTTP := httpclient.NewDefaultClient(5 * time.Second)
 	retryHTTP := httpclient.NewRetryClient(baseHTTP, httpclient.RetryConfig{
@@ -61,7 +74,6 @@ func main() {
 	if err != nil {
 		zapLog.Fatal("failed to init kafka producer", zap.Error(err))
 	}
-	defer producer.Close()
 
 	outboxRepo := repository.NewOutboxPostgres(database)
 	relay := worker.NewOutboxRelay(outboxRepo, producer, worker.Config{
@@ -96,14 +108,31 @@ func main() {
 	}()
 
 	<-ctx.Done()
-	zapLog.Info("shutdown signal received")
+	zapLog.Info("shutting down")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		zapLog.Error("http shutdown", zap.Error(err))
+		zapLog.Error("http shutdown failed", zap.Error(err))
+	} else {
+		zapLog.Info("http server stopped")
 	}
 
 	wg.Wait()
+	zapLog.Info("workers stopped")
+
+	if err := producer.Close(); err != nil {
+		zapLog.Error("kafka producer close failed", zap.Error(err))
+	} else {
+		zapLog.Info("kafka producer closed")
+	}
+
+	if err := database.Close(); err != nil {
+		zapLog.Error("database close failed", zap.Error(err))
+	} else {
+		zapLog.Info("database closed")
+	}
+
+	zapLog.Info("shutdown complete")
 }

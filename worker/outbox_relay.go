@@ -49,7 +49,7 @@ func (r *OutboxRelay) Run(ctx context.Context) {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			r.workerLoop(ctx, id)
+			r.workerPool(ctx, id)
 		}(i)
 	}
 
@@ -57,7 +57,7 @@ func (r *OutboxRelay) Run(ctx context.Context) {
 	r.logger.Info("outbox relay stopped")
 }
 
-func (r *OutboxRelay) workerLoop(ctx context.Context, id int) {
+func (r *OutboxRelay) workerPool(ctx context.Context, id int) {
 	r.logger.Info("worker started", zap.Int("worker_id", id))
 	defer r.logger.Info("worker stopped", zap.Int("worker_id", id))
 
@@ -99,7 +99,6 @@ func (r *OutboxRelay) processBatch(ctx context.Context, workerID int) {
 			r.logger.Error("process event",
 				zap.String("event_id", ev.ID),
 				zap.Error(err))
-			return
 		}
 	}
 

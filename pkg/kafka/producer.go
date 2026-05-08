@@ -62,7 +62,7 @@ func (p *Producer) Publish(ctx context.Context, key string, payload []byte) erro
 
 	deliveryChan := make(chan kafka.Event, 1)
 
-	if err := p.kafkaProducer.Produce(message, deliveryChan); err != nil {
+	if err :=  p.kafkaProducer.Produce(message, deliveryChan); err != nil {
 		return fmt.Errorf("kafka: produce: %w", err)
 	}
 
@@ -84,12 +84,12 @@ func (p *Producer) Publish(ctx context.Context, key string, payload []byte) erro
 	}
 }
 
-func (p *Producer) Close() {
-	remeaning := p.kafkaProducer.Flush(5000)
-	if remeaning > 0 {
-		p.logger.Warn("kafkaa priduces: messages not flushed on close",
-			zap.Int("remeaning", remeaning))
-	}
-
+func (p *Producer) Close() error {
+	remaining := p.kafkaProducer.Flush(5000)
 	p.kafkaProducer.Close()
+
+	if remaining > 0 {
+		return fmt.Errorf("kafka: %d messages not flushed on close", remaining)
+	}
+	return nil
 }
