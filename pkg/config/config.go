@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/spf13/viper"
 )
@@ -17,6 +18,12 @@ type Config struct {
 	ExchangeAPIKey     string
 	KafkaBrokers       []string
 	KafkaPaymentsTopic string
+	OutboxWorkerCount  int
+	OutboxBatchSize    int
+	OutboxPollInterval time.Duration
+	OutboxMaxAttempts  int
+	OutboxBaseBackoff  time.Duration
+	OutboxMaxBackoff   time.Duration
 }
 
 func Load() (*Config, error) {
@@ -59,6 +66,40 @@ func Load() (*Config, error) {
 		exchangeURL = "https://v6.exchangerate-api.com"
 	}
 
+	outboxWorkers := viper.GetInt("OUTBOX_WORKERS")
+	if outboxWorkers <= 0 {
+		return nil, fmt.Errorf("OUTBOX_WORKERS must be > 0")
+	}
+
+	outboxBatchSize := viper.GetInt("OUTBOX_BATCH_SIZE")
+	if outboxBatchSize <= 0 {
+		return nil, fmt.Errorf("OUTBOX_BATCH_SIZE must be > 0")
+	}
+
+	outboxPollInterval := viper.GetDuration("OUTBOX_POLL_INTERVAL")
+	if outboxPollInterval <= 0 {
+		return nil, fmt.Errorf("OUTBOX_POLL_INTERVAL must be > 0")
+	}
+
+	outboxMaxAttempts := viper.GetInt("OUTBOX_MAX_ATTEMPTS")
+	if outboxMaxAttempts <= 0 {
+		return nil, fmt.Errorf("OUTBOX_MAX_ATTEMPTS must be > 0")
+	}
+
+	outboxBaseBackoff := viper.GetDuration("OUTBOX_BASE_BACKOFF")
+	if outboxBaseBackoff <= 0 {
+		return nil, fmt.Errorf("OUTBOX_BASE_BACKOFF must be > 0")
+	}
+
+	outboxMaxBackoff := viper.GetDuration("OUTBOX_MAX_BACKOFF")
+	if outboxMaxBackoff <= 0 {
+		return nil, fmt.Errorf("OUTBOX_MAX_BACKOFF must be > 0")
+	}
+
+	if outboxBaseBackoff > outboxMaxBackoff {
+		return nil, fmt.Errorf("OUTBOX_BASE_BACKOFF must be <= OUTBOX_MAX_BACKOFF")
+	}
+
 	return &Config{
 		DatabaseURL:        dbUrl,
 		MigrationsPath:     viper.GetString("MIGRATIONS_PATH"),
@@ -68,5 +109,11 @@ func Load() (*Config, error) {
 		ExchangeAPIKey:     exchangeKey,
 		KafkaBrokers:       kafkaBrokers,
 		KafkaPaymentsTopic: kafkaPaymentsTopic,
+		OutboxWorkerCount:  outboxWorkers,
+		OutboxBatchSize:    outboxBatchSize,
+		OutboxPollInterval: outboxPollInterval,
+		OutboxMaxAttempts:  outboxMaxAttempts,
+		OutboxBaseBackoff:  outboxBaseBackoff,
+		OutboxMaxBackoff:   outboxMaxBackoff,
 	}, nil
 }

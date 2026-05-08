@@ -19,9 +19,18 @@ services:
       MIGRATIONS_PATH: migrations
       SERVER_PORT: "8080"
       LOG_LEVEL: info
+      KAFKA_BROKERS: kafka:9094
+      KAFKA_PAYMENTS_TOPIC: payments
       EXCHANGE_API_KEY: ${EXCHANGE_API_KEY}
+      OUTBOX_WORKERS: "5"
+      OUTBOX_BATCH_SIZE: "10"
+      OUTBOX_POLL_INTERVAL: "2s"
+      OUTBOX_MAX_ATTEMPTS: "5"
+      OUTBOX_BASE_BACKOFF: "1s"
+      OUTBOX_MAX_BACKOFF: "5m"
     depends_on:
       - db
+      - kafka
   kafka:
     image: apache/kafka:3.8.0
     ports:

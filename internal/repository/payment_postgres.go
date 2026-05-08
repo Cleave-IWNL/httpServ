@@ -2,13 +2,14 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+
 	"httpServ/internal/apperror"
 	"httpServ/internal/model"
 	"httpServ/pkg/db"
-
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -21,24 +22,47 @@ func NewRepoPostgres(db db.DB) *RepoPostgres {
 	return &RepoPostgres{db: db}
 }
 
-func (r *RepoPostgres) Create(ctx context.Context, p model.Payment) (string, error) {
-	id := uuid.New().String()
+func (r *RepoPostgres) Create(ctx context.Context, p model.Payment, event model.PaymentCreatedEvent) (id string, err error) {
+	id = uuid.New().String()
+	event.PaymentID = id
 
-	var exists bool
-
-	err := r.db.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM payments WHERE id = $1)", id).Scan(&exists)
-	if err != nil {
-		return "", err
-	}
-
-	if exists {
-		return "", fmt.Errorf("payment with id %s: %w", id, apperror.ErrAlreadyExists)
-	}
-
-	_, err = r.db.ExecContext(ctx, "INSERT INTO payments (id, amount, currency) VALUES ($1, $2, $3)", id, p.Amount, p.Currency)
+	tx, err := r.db.BeginTx(ctx, nil)
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("begin tx: %w", err)
+	}
+
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO payments (id, amount, currency) VALUES ($1, $2, $3)",
+		id, p.Amount, p.Currency,
+	)
+
+	if err != nil {
+		return "", fmt.Errorf("insert payment: %w", err)
+	}
+
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return "", fmt.Errorf("marshal outbox payload: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO outbox_events (aggregate_id, event_type, payload) VALUES ($1, $2, $3)",
+		id, event.EventType, payload,
+	)
+
+	if err != nil {
+		return "", fmt.Errorf("insert outbox event: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return "", fmt.Errorf("commit tx: %w", err)
 	}
 
 	return id, nil

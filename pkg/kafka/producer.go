@@ -2,11 +2,8 @@ package kafkaclient
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
-
-	"httpServ/internal/model"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"go.uber.org/zap"
@@ -53,25 +50,19 @@ func (p *Producer) drainEvents() {
 	}
 }
 
-func (p *Producer) PublishPaymentCreated(ctx context.Context, event model.PaymentCreatedEvent) error {
-	payload, err := json.Marshal(event)
-
-	if err != nil {
-		return fmt.Errorf("kafka: marshal event: %w", err)
-	}
-
+func (p *Producer) Publish(ctx context.Context, key string, payload []byte) error {
 	message := &kafka.Message{
 		TopicPartition: kafka.TopicPartition{
 			Topic:     &p.paymentsTopic,
 			Partition: kafka.PartitionAny,
 		},
-		Key:   []byte(event.PaymentID),
+		Key:   []byte(key),
 		Value: payload,
 	}
 
 	deliveryChan := make(chan kafka.Event, 1)
 
-	if err := p.kafkaProducer.Produce(message, deliveryChan); err != nil {
+	if err :=  p.kafkaProducer.Produce(message, deliveryChan); err != nil {
 		return fmt.Errorf("kafka: produce: %w", err)
 	}
 
@@ -93,12 +84,12 @@ func (p *Producer) PublishPaymentCreated(ctx context.Context, event model.Paymen
 	}
 }
 
-func (p *Producer) Close() {
-	remeaning := p.kafkaProducer.Flush(5000)
-	if remeaning > 0 {
-		p.logger.Warn("kafkaa priduces: messages not flushed on close",
-			zap.Int("remeaning", remeaning))
-	}
-
+func (p *Producer) Close() error {
+	remaining := p.kafkaProducer.Flush(5000)
 	p.kafkaProducer.Close()
+
+	if remaining > 0 {
+		return fmt.Errorf("kafka: %d messages not flushed on close", remaining)
+	}
+	return nil
 }
